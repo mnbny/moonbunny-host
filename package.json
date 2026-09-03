@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsx .tools/scripts/build.ts",
+    "release": "tsx .tools/scripts/release.ts",
     "test": "pnpm build && ./test/e2e.sh",
     "validate": "pnpm validate:format && pnpm validate:lint && pnpm validate:typecheck && pnpm build",
     "validate:format": "prettier --write . --ignore-unknown --cache --log-level=error",
