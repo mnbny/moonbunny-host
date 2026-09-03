@@ -73,6 +73,36 @@ check "project and slug are slugified" "$HOST/my-reports/fancy-report/" "$url4"
 urlfile=$(cli fixtures/index.html --project reports --slug single)
 check "single file deploys as the index" 200 "$(code "$urlfile")"
 
+urlcss=$(cli fixtures/style.css --project reports --slug single-asset)
+case $urlcss in
+  */style.css) check "non-index file URL names the file" 200 "$(code "$urlcss")" ;;
+  *) check "non-index file URL names the file" "*/style.css" "$urlcss" ;;
+esac
+
+check "oversized expiration is rejected" 400 "$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H 'Authorization: Bearer test-token' -H 'x-expires: 1e9' --data-binary @/dev/null "$HOST/_deploy/reports/overflow")"
+
+# A payload shipping .meta.json as a directory must not crash the server.
+evildir=$(mktemp -d)
+mkdir "$evildir/.meta.json"
+echo '<h1>dirmeta</h1>' > "$evildir/index.html"
+urldirmeta=$(cli "$evildir" --project reports --slug dir-meta)
+rm -rf "$evildir"
+check "metadata directory payload is survived" 200 "$(code "$urldirmeta")"
+
+# Concurrent deploys to one slug must land on two distinct URLs.
+ca=$(mktemp) cb=$(mktemp)
+cli fixtures --project reports --slug clash > "$ca" &
+cli fixtures --project reports --slug clash > "$cb" &
+wait
+if [[ -s $ca && -s $cb && "$(cat "$ca")" != "$(cat "$cb")" ]]; then
+  check "concurrent deploys stay distinct" distinct distinct
+else
+  check "concurrent deploys stay distinct" distinct "$(cat "$ca") vs $(cat "$cb")"
+fi
+check "first concurrent deploy serves" 200 "$(code "$(cat "$ca")")"
+check "second concurrent deploy serves" 200 "$(code "$(cat "$cb")")"
+rm -f "$ca" "$cb"
+
 check "nosniff header is set" nosniff "$(curl -sI -u me:secret "$HOST/reports/smoke/" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-content-type-options"{print $2}')"
 
 # A relative dot-dot symlink survives tar but must not survive the deploy.
@@ -92,6 +122,22 @@ echo '{"auth":"attacker:pwn"}' > "$fake/.meta.json"
 urlfake=$(cli "$fake" --project reports --slug fake-meta)
 rm -rf "$fake"
 check "server metadata beats a deployed one" 200 "$(code "$urlfake")"
+
+# A decompression bomb is stopped while it streams, not after it lands.
+bombdir=$(mktemp -d)
+dd if=/dev/zero of="$bombdir/big" bs=1048576 count=600 2> /dev/null
+tar -czf "$bombdir/bomb.tgz" -C "$bombdir" big
+rm "$bombdir/big"
+check "decompression bomb is rejected" 413 "$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H 'Authorization: Bearer test-token' --data-binary "@$bombdir/bomb.tgz" "$HOST/_deploy/reports/bomb")"
+rm -rf "$bombdir"
+
+slow=$(mktemp)
+dd if=/dev/urandom of="$slow" bs=1048576 count=8 2> /dev/null
+curl -s -o /dev/null -m 1 --limit-rate 100K -X PUT -H 'Authorization: Bearer test-token' --data-binary "@$slow" "$HOST/_deploy/reports/aborted" || true
+rm -f "$slow"
+sleep 1
+staging_left=$(compose exec -T app sh -c 'ls /data/.staging 2>/dev/null | wc -l' | tr -d '[:space:]')
+check "aborted upload leaves no staging garbage" 0 "$staging_left"
 
 # The compressed body is capped at 50MB.
 big=$(mktemp)
