@@ -9,5 +9,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["cli"]
+  "include": ["cli", ".tools"]
 }

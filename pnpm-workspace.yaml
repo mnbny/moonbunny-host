@@ -6,7 +6,9 @@ catalog:
   '@tsconfig/strictest': 2.0.8
   '@types/node': 26.4.1
   ansis: 4.3.1
+  change-case: 5.4.4
   citty: 0.2.2
+  esbuild: 0.28.2
   eslint: 10.9.1
   eslint-config-prettier: 10.1.8
   eslint-formatter-pretty: 7.1.0
@@ -16,6 +18,7 @@ catalog:
   globals: 17.12.0
   prettier: 3.9.6
   prettier-plugin-packagejson: 3.0.2
+  terser: 5.51.2
   tsx: 4.23.13
   # typescript-eslint 8.69.0 rejects TS 7, so this stays on the latest 6.x.
   typescript: 6.0.3

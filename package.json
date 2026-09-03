@@ -8,13 +8,16 @@
     "moonbunny": "./cli/moonbunny.mjs"
   },
   "scripts": {
-    "validate": "pnpm validate:format && pnpm validate:lint && pnpm validate:typecheck",
+    "build": "tsx .tools/scripts/build.ts",
+    "test": "pnpm build && ./test/e2e.sh",
+    "validate": "pnpm validate:format && pnpm validate:lint && pnpm validate:typecheck && pnpm build",
     "validate:format": "prettier --write . --ignore-unknown --cache --log-level=error",
     "validate:lint": "eslint --fix --cache --format=pretty .",
     "validate:typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "ansis": "catalog:",
+    "change-case": "catalog:",
     "citty": "catalog:",
     "tsx": "catalog:"
   },
@@ -22,6 +25,7 @@
     "@eslint/js": "catalog:",
     "@tsconfig/strictest": "catalog:",
     "@types/node": "catalog:",
+    "esbuild": "catalog:",
     "eslint": "catalog:",
     "eslint-config-prettier": "catalog:",
     "eslint-formatter-pretty": "catalog:",
@@ -31,6 +35,7 @@
     "globals": "catalog:",
     "prettier": "catalog:",
     "prettier-plugin-packagejson": "catalog:",
+    "terser": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:"
   },
