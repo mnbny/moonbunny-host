@@ -57,6 +57,8 @@ One container. Run it behind your reverse proxy, which owns the domain and TLS. 
 docker compose up -d
 ```
 
+The container runs as an unprivileged user (uid 1000), so the host path behind `DATA_PATH` must be writable by that uid: `chown -R 1000:1000 <path>` once.
+
 The compose file pulls the published image and reads these from the environment or a `.env` file beside it:
 
 | Var             | Description                                                      |

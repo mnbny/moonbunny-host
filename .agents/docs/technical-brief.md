@@ -6,7 +6,9 @@ The system is one Node server that accepts deploys and serves the deployed files
 
 The server stores deployed content on a mounted volume, organized by project and then by slug. A deploy uploads a gzipped tarball of a directory. Deploys are immutable: the server never replaces an existing slug, and a taken slug receives a unique suffix. The server also normalizes the project and the slug into URL-safe names, generates the slug when a deploy does not send one, and holds the default expiration, so every client gets the same naming and lifetime. The response carries the final path, and the CLI prints the URL from that response.
 
-Deploys are ephemeral. Each deploy carries a hidden metadata file with its deploy time, its expiration time, and its optional credentials. A sweep at server start, and once each day after, deletes every deploy past its expiration. A deploy may opt out of expiration.
+Deploys are ephemeral. Each deploy carries a hidden metadata file with its deploy time, its expiration time, and its optional credentials. A sweep at server start, and once each hour after, deletes every deploy past its expiration. A deploy may opt out of expiration.
+
+A deploy extracts into an unservable staging area, and publishing is one atomic rename. A partial deploy, an unauthenticated window, or a collision between concurrent deploys is therefore not possible: the rename fails on a taken slug and the deploy retries with a unique suffix.
 
 ## Authentication
 
@@ -18,9 +20,10 @@ Deploys are ephemeral. Each deploy carries a hidden metadata file with its deplo
 
 - Uploaded content is never executed. The server only extracts an archive and streams files back out, and responses forbid content-type sniffing.
 - After extraction the server removes every entry that is not a directory or a regular file with one hard link, so a deploy cannot plant a link that reads outside its own slug.
-- The server caps the upload size and the extracted size, and rejects a request that exceeds either cap.
+- The server caps the upload size and the extracted size. Both counts run while the request streams, so an oversized upload or a decompression bomb is stopped before it fills the volume.
 - The server writes its metadata file after extraction, so a metadata file inside a deploy never wins over the server's own.
 - The host serves a robots rule that forbids all crawling. A file placed at the data root overrides the rule; a deploy cannot create that file.
+- The container runs as an unprivileged user, so a code-execution bug in the extraction path does not grant root. The host data path must be writable by that user.
 
 ## CLI
 
