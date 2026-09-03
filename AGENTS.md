@@ -1,0 +1,15 @@
+# Agent Docs
+
+Read [.agents/docs/index.md](./.agents/docs/index.md).
+
+After a feature or change reaches its logical conclusion, such as during verification or before a commit, use the `ir-living-docs` skill to update the living documentation. Do not do this preemptively.
+
+## Run Validations Smartly
+
+Validation command: `pnpm validate`
+
+It formats, lints, and typechecks the repository. Run it when it is logically appropriate, not after every iteration. Examples:
+
+- After a feature implementation is fully complete.
+- Before staging or committing files.
+- When asked by the user.
