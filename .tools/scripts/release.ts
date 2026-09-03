@@ -7,11 +7,19 @@ const REPO = process.env['MOONBUNNY_IMAGE'] ?? 'ghcr.io/mnbny/moonbunny-host'
 
 function run(command: string, args: string[]) {
   const result = spawnSync(command, args, { stdio: 'inherit' })
+  if (result.error) {
+    console.error(result.error.message)
+    process.exit(1)
+  }
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
 function capture(command: string, args: string[]) {
   const result = spawnSync(command, args, { encoding: 'utf8' })
+  if (result.error) {
+    console.error(result.error.message)
+    process.exit(1)
+  }
   if (result.status !== 0) {
     console.error(result.stderr.trim())
     process.exit(1)
