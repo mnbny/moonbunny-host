@@ -1,6 +1,6 @@
 # moonbunny-host
 
-Self-hosted static site host for personal reports. One server accepts deploys and serves the files. One CLI command deploys a directory. Everything is a path on one domain: `/{project}/{slug}/`.
+Self-hosted static site host for personal reports. One server accepts deploys and serves the files. A CLI deploys a directory or a single file. Everything is a path on one domain: `/{project}/{slug}/`.
 
 ## Run the server
 
@@ -14,7 +14,7 @@ docker compose up -d
 | `DATA_DIR`      | Content directory. Default `/data`.     |
 | `PORT`          | Internal HTTP port. Default `8080`.     |
 
-The compose file reads `PORT`, `DEPLOY_TOKENS`, and `DATA_PATH` (host path for the data volume, default `./data`) from the environment or a `.env` file beside it, so a NAS panel can configure it without edits.
+The compose file runs the published image and reads `MOONBUNNY_IMAGE` (pin a `:<commit>` tag to roll back), `PORT`, `DEPLOY_TOKENS`, and `DATA_PATH` (host path for the data volume, default `./data`) from the environment or a `.env` file beside it, so a NAS panel can configure it without edits.
 
 To run without a checkout on the NAS, `pnpm release` builds the image for x86_64 and pushes it as `:latest` plus an immutable `:<commit>` tag (`MOONBUNNY_IMAGE` overrides the default `ghcr.io/mnbny/moonbunny-host`). A release only runs from a clean, committed tree, so every tag names its exact source. The NAS runs `:latest`; rolling back means pointing it at the previous commit tag.
 
@@ -48,12 +48,14 @@ pnpm install
 node cli/setup.mjs --dev
 ```
 
-`cli/moonbunny.bundle.mjs` is generated: never edit it, and `pnpm validate` rebuilds it, so a repository that passes carries a bundle that matches its source.
+The `*.bundle.mjs` files are generated: never edit them, and `pnpm validate` rebuilds both, so a repository that passes carries bundles that match their source.
 
 ```sh
 moonbunny deploy ./dist --project reports
 # → https://host.moonbunny.io/reports/1b2a97e0-.../
 ```
+
+`moonbunny readme` prints this guide.
 
 ### Connection
 
@@ -66,12 +68,12 @@ Point the CLI at your server with env vars or flags. A flag wins over its env va
 
 ### Flags
 
-| Flag        | Description                                                          |
-| ----------- | -------------------------------------------------------------------- |
-| `--project` | First URL path segment, slugified. Required.                         |
-| `--slug`    | Second URL path segment, slugified. Default: a random UUID.          |
-| `--auth`    | `user:pass` basic auth required to view this deploy.                 |
-| `--expires` | Days until the deploy is deleted. `0` keeps it forever. Default: 30. |
+| Flag        | Description                                                           |
+| ----------- | --------------------------------------------------------------------- |
+| `--project` | First URL path segment, slugified by the server. Required.            |
+| `--slug`    | Second URL path segment, slugified. Default: the server picks a UUID. |
+| `--auth`    | `user:pass` basic auth required to view this deploy.                  |
+| `--expires` | Days until the deploy is deleted. `0` keeps it forever. Default: 30.  |
 
 ### Examples
 

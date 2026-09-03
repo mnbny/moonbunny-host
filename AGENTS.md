@@ -8,7 +8,7 @@ After a feature or change reaches its logical conclusion, such as during verific
 
 Validation command: `pnpm validate`
 
-It formats, lints, and typechecks the repository. Run it when it is logically appropriate, not after every iteration. Examples:
+It formats, lints, and typechecks the repository, then rebuilds the committed bundles. Run it when it is logically appropriate, not after every iteration. Examples:
 
 - After a feature implementation is fully complete.
 - Before staging or committing files.
