@@ -39,7 +39,7 @@ A release publishes the server image to a container registry with a moving lates
 
 ## Testing
 
-One end-to-end harness verifies the host. The harness builds the real container, puts a small nginx proxy in front of it as a stand-in for Nginx Proxy Manager, deploys fixture files with the real CLI, and checks the served responses: token rejection, basic auth, content and asset types, hidden files, traversal, redirects, slug conflicts, slug normalization, and expiration. The harness is sandboxed: it binds only to localhost, exposes the app only through the proxy, and removes every container and network on exit.
+One end-to-end harness verifies the host. The harness builds the real container, puts a small nginx proxy in front of it as a stand-in for Nginx Proxy Manager, deploys fixture files with the real CLI, and checks the served responses: token rejection, basic auth, content and asset types, hidden files, traversal, redirects, slug conflicts, slug normalization, expiration, concurrent deploys to one slug, decompression bombs, dropped uploads, and hostile metadata and expiration input. The harness is sandboxed: it binds only to localhost, exposes the app only through the proxy, and removes every container and network on exit.
 
 ## Conventions
 

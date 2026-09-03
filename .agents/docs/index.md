@@ -34,4 +34,4 @@ Add each document using this format:
 #### [technical-brief.md](./technical-brief.md)
 
 - Description: Operating model of the server, CLI, storage, authentication, reverse proxy, distribution, and testing, and the project conventions.
-- Tags: `server`, `cli`, `docker`, `tokens`, `basic-auth`, `conventions`, `release`, `registry`, `bundles`, `testing`
+- Tags: `server`, `cli`, `docker`, `tokens`, `basic-auth`, `conventions`, `release`, `registry`, `bundles`, `testing`, `security`, `hardening`
