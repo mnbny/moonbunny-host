@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
+import zlib from 'node:zlib'
 
 const ROOT = process.env.DATA_DIR || '/data'
 const PORT = process.env.PORT || 8080
@@ -40,69 +41,110 @@ const readMeta = dir => JSON.parse(fs.readFileSync(path.join(dir, '.meta.json'),
 // tar refuses absolute symlinks but extracts relative ones, which would let a served
 // path escape the slug; keep only directories and regular files with one hard link.
 function scrub(dir) {
-  let bytes = 0
   for (const name of fs.readdirSync(dir)) {
     const file = path.join(dir, name)
     const stats = fs.lstatSync(file)
-    if (stats.isDirectory()) bytes += scrub(file)
-    else if (stats.isFile() && stats.nlink === 1) bytes += stats.size
-    else fs.rmSync(file, { recursive: true, force: true })
+    if (stats.isDirectory()) scrub(file)
+    else if (!stats.isFile() || stats.nlink !== 1) fs.rmSync(file, { recursive: true, force: true })
   }
-  return bytes
 }
 
 function deploy(req, res, urlPath) {
   const token = (req.headers.authorization || '').replace('Bearer ', '')
   if (!TOKENS.includes(token)) return end(res, 401, 'bad token')
 
-  const [rawProject, rawSlug, extra] = urlPath.slice('/_deploy/'.length).split('/')
-  if (!rawProject || extra) return end(res, 400, 'bad project/slug')
-
-  const project = kebabCase(decodeURIComponent(rawProject))
-  const preferred = rawSlug ? kebabCase(decodeURIComponent(rawSlug)) : randomUUID()
+  let project, preferred
+  try {
+    const [rawProject, rawSlug, extra] = urlPath.slice('/_deploy/'.length).split('/')
+    if (!rawProject || extra) return end(res, 400, 'bad project/slug')
+    project = kebabCase(decodeURIComponent(rawProject))
+    preferred = rawSlug ? kebabCase(decodeURIComponent(rawSlug)) : randomUUID()
+  } catch {
+    return end(res, 400, 'bad project/slug')
+  }
   if (!SEGMENT.test(project) || !SEGMENT.test(preferred)) return end(res, 400, 'bad project/slug')
 
   const days = Number(req.headers['x-expires'] ?? 30)
-  if (!Number.isFinite(days) || days < 0) return end(res, 400, 'bad expiration')
+  // The upper bound keeps the computed timestamp inside the valid Date range.
+  if (!Number.isFinite(days) || days < 0 || days > 36_500) return end(res, 400, 'bad expiration')
 
   if (Number(req.headers['content-length']) > MAX_BODY) return end(res, 413, 'too large')
 
-  // Deploys are immutable: a taken slug gets a unique suffix instead of being replaced.
-  let slug = preferred
-  let dir = path.join(ROOT, project, slug)
-  if (fs.existsSync(dir)) {
-    slug = `${preferred}-${randomUUID()}`
-    dir = path.join(ROOT, project, slug)
-  }
-  fs.mkdirSync(dir, { recursive: true })
+  // Extraction happens in an unservable staging directory and publishing is one
+  // atomic rename, so a partial or unauthenticated deploy is never visible.
+  const staging = path.join(ROOT, '.staging', randomUUID())
+  fs.mkdirSync(staging, { recursive: true })
 
-  const tar = spawn('tar', ['-xz', '-C', dir])
+  const fail = (code, msg) => {
+    fs.rmSync(staging, { recursive: true, force: true })
+    if (!res.headersSent) end(res, code, msg)
+  }
+  const abort = (code, msg) => {
+    fail(code, msg)
+    req.destroy()
+    tar.kill()
+  }
+
+  // Decompression runs here rather than in tar so the decompressed size is
+  // enforced while it streams, before a bomb can fill the volume.
+  const gunzip = zlib.createGunzip()
+  const tar = spawn('tar', ['-x', '-C', staging])
   tar.stdin.on('error', () => {})
+  tar.on('error', () => abort(500, 'extract failed'))
+  gunzip.on('error', () => abort(400, 'extract failed'))
+
+  // A disconnect mid-upload never reaches tar's close event, so it needs its
+  // own cleanup or the tar process and the staging dir leak.
+  res.on('close', () => {
+    if (res.writableFinished) return
+    abort(400, 'client disconnected')
+  })
+
   // A client can lie about content-length, so count what actually arrives.
   let received = 0
   req.on('data', chunk => {
     received += chunk.length
-    if (received > MAX_BODY) req.destroy()
+    if (received > MAX_BODY) abort(413, 'too large')
   })
-  req.pipe(tar.stdin)
+  let extracted = 0
+  gunzip.on('data', chunk => {
+    extracted += chunk.length
+    if (extracted > MAX_EXTRACTED) abort(413, 'extracted content too large')
+  })
+  req.pipe(gunzip).pipe(tar.stdin)
+
   tar.on('close', code => {
-    if (code !== 0) {
-      fs.rmSync(dir, { recursive: true, force: true })
-      return end(res, 400, 'extract failed')
+    try {
+      if (res.headersSent) return fs.rmSync(staging, { recursive: true, force: true })
+      if (code !== 0) return fail(400, 'extract failed')
+      scrub(staging)
+
+      const meta = {
+        deployedAt: new Date().toISOString(),
+        expiresAt: days ? new Date(Date.now() + days * 86_400_000).toISOString() : null,
+        requestedSlug: preferred,
+      }
+      const auth = req.headers['x-auth']
+      if (auth) meta.auth = auth
+      const metaFile = path.join(staging, '.meta.json')
+      // The payload may have shipped this name, even as a directory.
+      fs.rmSync(metaFile, { recursive: true, force: true })
+      fs.writeFileSync(metaFile, JSON.stringify(meta))
+
+      // The rename fails on a non-empty target, which makes it the atomic
+      // "slug is taken" check; deploys are immutable, so take a suffix instead.
+      fs.mkdirSync(path.join(ROOT, project), { recursive: true })
+      let slug = preferred
+      try {
+        fs.renameSync(staging, path.join(ROOT, project, slug))
+      } catch {
+        slug = `${preferred}-${randomUUID()}`
+        fs.renameSync(staging, path.join(ROOT, project, slug))
+      }
+      end(res, 200, `/${project}/${slug}/`)
+    } catch {
+      fail(500, 'deploy failed')
     }
-    if (scrub(dir) > MAX_EXTRACTED) {
-      fs.rmSync(dir, { recursive: true, force: true })
-      return end(res, 400, 'extracted content too large')
-    }
-    const meta = {
-      deployedAt: new Date().toISOString(),
-      expiresAt: days ? new Date(Date.now() + days * 86_400_000).toISOString() : null,
-      requestedSlug: preferred,
-    }
-    const auth = req.headers['x-auth']
-    if (auth) meta.auth = auth
-    fs.writeFileSync(path.join(dir, '.meta.json'), JSON.stringify(meta))
-    end(res, 200, `/${project}/${slug}/`)
   })
 }
 
@@ -113,12 +155,23 @@ function serve(req, res, urlPath) {
     return res.end('User-agent: *\nDisallow: /\n')
   }
 
-  const parts = urlPath.split('/').map(decodeURIComponent).filter(Boolean)
+  let parts
+  try {
+    parts = urlPath.split('/').map(decodeURIComponent).filter(Boolean)
+  } catch {
+    return end(res, 404, 'not found')
+  }
   if (parts.some(p => p.startsWith('.') || p.includes('/'))) return end(res, 404, 'not found')
 
   if (parts.length >= 2) {
     const slugDir = path.join(ROOT, parts[0], parts[1])
-    const expected = fs.existsSync(path.join(slugDir, '.meta.json')) ? readMeta(slugDir).auth : undefined
+    let expected
+    try {
+      expected = fs.existsSync(path.join(slugDir, '.meta.json')) ? readMeta(slugDir).auth : undefined
+    } catch {
+      // The sweep can remove the slug mid-request.
+      return end(res, 404, 'not found')
+    }
     if (expected) {
       const header = req.headers.authorization || ''
       const got = header.startsWith('Basic ') ? Buffer.from(header.slice(6), 'base64').toString() : ''
@@ -129,22 +182,49 @@ function serve(req, res, urlPath) {
     }
   }
 
+  const statOrNull = target => {
+    try {
+      return fs.statSync(target)
+    } catch {
+      return null
+    }
+  }
+
   let file = path.join(ROOT, ...parts)
-  if (fs.existsSync(file) && fs.statSync(file).isDirectory()) {
+  let stats = statOrNull(file)
+  if (stats?.isDirectory()) {
     if (!urlPath.endsWith('/')) {
       res.writeHead(301, { Location: urlPath + '/' })
       return res.end()
     }
     file = path.join(file, 'index.html')
+    stats = statOrNull(file)
   }
-  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return end(res, 404, 'not found')
+  if (!stats?.isFile()) return end(res, 404, 'not found')
 
   res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream' })
-  fs.createReadStream(file).pipe(res)
+  if (req.method === 'HEAD') return res.end()
+  const stream = fs.createReadStream(file)
+  stream.on('error', () => res.destroy())
+  stream.pipe(res)
 }
 
 function sweep() {
+  // A staging dir left behind by a crashed deploy is garbage after a day.
+  const stagingRoot = path.join(ROOT, '.staging')
+  if (fs.existsSync(stagingRoot)) {
+    for (const name of fs.readdirSync(stagingRoot)) {
+      const dir = path.join(stagingRoot, name)
+      try {
+        if (fs.statSync(dir).mtimeMs < Date.now() - 86_400_000) fs.rmSync(dir, { recursive: true, force: true })
+      } catch {
+        // A deploy can publish or clean the entry mid-scan.
+      }
+    }
+  }
+
   for (const project of fs.readdirSync(ROOT)) {
+    if (project.startsWith('.')) continue
     const projectDir = path.join(ROOT, project)
     if (!fs.statSync(projectDir).isDirectory()) continue
     for (const slug of fs.readdirSync(projectDir)) {
@@ -205,7 +285,7 @@ function createInterval({ intervalMs, immediate = false }, onTick) {
   }
 }
 
-createInterval({ immediate: true, intervalMs: 86_400_000 }, () => {
+createInterval({ immediate: true, intervalMs: 3_600_000 }, () => {
   try {
     sweep()
   } catch (error) {
