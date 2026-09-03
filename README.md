@@ -18,19 +18,62 @@ Put a reverse proxy (Nginx Proxy Manager) in front for the public domain and TLS
 
 ## Deploy
 
-Requirements: Node.js 22 or later. Run `pnpm install` once.
+Requirements: `~/.local/bin` on your `PATH`. To use the CLI, Node.js 20 or later. To develop it, Node.js 22 or later and pnpm 11.
+
+Run either setup from the checkout. It links `moonbunny` into `~/.local/bin`.
+
+**Use the CLI.** A ready-to-run bundle is committed, so this setup installs nothing:
 
 ```sh
-export MOONBUNNY_HOST=https://host.moonbunny.io
-export MOONBUNNY_TOKEN=...
-
-moonbunny deploy ./dist --project reports [--slug 2026-09-02] [--auth user:pass]
+node cli/setup.mjs
 ```
 
-| Flag        | Description                                          |
-| ----------- | ---------------------------------------------------- |
-| `--project` | First URL path segment. Required.                    |
-| `--slug`    | Second URL path segment. Default: a random UUID.     |
-| `--auth`    | `user:pass` basic auth required to view this deploy. |
+**Develop the CLI.** `--dev` links the TypeScript entry point, so `moonbunny` runs your working copy:
 
-On success the command prints only the deploy URL to stdout, so a script can capture it. A repeat deploy to the same slug replaces the previous content.
+```sh
+pnpm install
+node cli/setup.mjs --dev
+```
+
+`cli/moonbunny.bundle.mjs` is generated: never edit it, and `pnpm validate` rebuilds it, so a repository that passes carries a bundle that matches its source.
+
+```sh
+moonbunny deploy ./dist --project reports
+# → https://host.moonbunny.io/reports/1b2a97e0-.../
+```
+
+### Connection
+
+Point the CLI at your server with env vars or flags. A flag wins over its env var.
+
+| Env               | Flag      | Description                                   |
+| ----------------- | --------- | --------------------------------------------- |
+| `MOONBUNNY_HOST`  | `--host`  | Server URL, e.g. `https://host.moonbunny.io`. |
+| `MOONBUNNY_TOKEN` | `--token` | One of the server's deploy tokens.            |
+
+### Flags
+
+| Flag        | Description                                                          |
+| ----------- | -------------------------------------------------------------------- |
+| `--project` | First URL path segment, slugified. Required.                         |
+| `--slug`    | Second URL path segment, slugified. Default: a random UUID.          |
+| `--auth`    | `user:pass` basic auth required to view this deploy.                 |
+| `--expires` | Days until the deploy is deleted. `0` keeps it forever. Default: 30. |
+
+### Examples
+
+```sh
+# named slug, password-protected, deleted after 7 days
+moonbunny deploy ./coverage --project ci --slug pr-123 --auth me:secret --expires 7
+
+# kept forever, connection via flags
+moonbunny deploy ./docs --project handbook --slug v1 --expires 0 --host https://reports.example.com --token abc123
+```
+
+### Behavior
+
+- Prints only the deploy URL to stdout, so scripts can capture it. Errors go to stderr with exit code 1.
+- Deploys are immutable: a taken slug gets a unique suffix, and the printed URL carries the final slug.
+- Deploys are ephemeral: the server deletes each deploy after its expiration, with a sweep at start and once each day.
+- `--project` and `--slug` are slugified: `"My Report"` becomes `my-report`.
+- The target can be a directory or a single file. `index.html` serves at the slug root; any other file serves at its own name.
