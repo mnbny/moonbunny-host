@@ -24,11 +24,15 @@ Deploys are ephemeral. Each deploy carries a hidden metadata file with its deplo
 
 ## CLI
 
-The deploy client is a TypeScript CLI that follows the MAACS CLI conventions. A plain Node launcher registers tsx and runs the TypeScript entry point. The entry point defines one subcommand, deploy. The deploy command archives a directory or a single file with tar and uploads the archive to the deploy endpoint. The command reads the host URL and the token from environment variables or from flags, and a flag wins over its environment variable. The command takes the project, the optional slug, the optional basic auth credentials, and the optional expiration as flags. On success the command prints only the deploy URL to stdout, so a script can capture the URL. The CLI is the only client. There is no web UI. The HTTP surface contains only the deploy endpoint and static file serving.
+The deploy client is a TypeScript CLI that follows the MAACS CLI conventions. A plain Node launcher registers tsx and runs the TypeScript entry point. The CLI has two subcommands: one deploys, and one prints the repository guide, which keeps the guide the single documentation source for people, agents, and scripts. The deploy command archives a directory or a single file with tar and uploads the archive to the deploy endpoint. The command reads the host URL and the token from environment variables or from flags, and a flag wins over its environment variable. The command takes the project, the optional slug, the optional basic auth credentials, and the optional expiration as flags. On success the command prints only the deploy URL to stdout, so a script can capture the URL. The CLI is the only client. There is no web UI. The HTTP surface contains only the deploy endpoint and static file serving.
 
 Ready-to-run bundles of the CLI and the server are committed in the repository. Each bundle is one file, runs on an older Node release than development needs, and requires no install. The validation command rebuilds both bundles after its checks pass, so a repository that passes validation carries bundles that match their source. The bundles are generated: tooling does not format, lint, or diff them, and nobody edits them by hand.
 
 A setup script links the CLI onto the user's search path. The script links the bundle by default, so a consumer is finished after one command with nothing installed. A development flag links the TypeScript entry point instead, which runs the working copy as it is edited.
+
+## Distribution
+
+A release publishes the server image to a container registry with a moving latest tag and an immutable tag that names the commit it was built from. A release runs only from a clean, committed tree, so every tag names its exact source. The compose file pulls the published image instead of building, so the NAS never needs a checkout. A rollback runs the previous commit tag. The test harness is the exception: it always builds the image from the working tree, so it tests the source and not a stale release.
 
 ## Testing
 
