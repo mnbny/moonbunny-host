@@ -2,7 +2,7 @@
 
 ## Purpose
 
-moonbunny-host is a self-hosted static site host for personal use. It exists so the owner can upload generated HTML reports programmatically and share them at stable URLs. It implements only the deploy workflow of a static host such as surge.sh, nothing else.
+moonbunny-host is a self-hosted host for any static site, for personal use. It exists so the owner and the owner's coding agents can publish static content programmatically and share it at a URL: build reports, demos, one-off pages. Deploys are ephemeral by design, so published content removes itself. It implements only the deploy workflow of a static host such as surge.sh, nothing else.
 
 ## Vocabulary
 

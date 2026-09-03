@@ -28,8 +28,8 @@ Add each document using this format:
 
 #### [project-brief.md](./project-brief.md)
 
-- Description: Purpose, scope, boundaries, and vocabulary of the moonbunny-host static report host.
-- Tags: `purpose`, `scope`, `deploy`, `reports`, `hosting`
+- Description: Purpose, scope, boundaries, and vocabulary of the moonbunny-host static site host.
+- Tags: `purpose`, `scope`, `deploy`, `agents`, `hosting`
 
 #### [technical-brief.md](./technical-brief.md)
 
