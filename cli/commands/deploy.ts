@@ -69,7 +69,10 @@ export default defineCommand({
     const body = (await response.text()).trim()
     if (!response.ok) fail(`Deploy failed (${response.status}): ${body}`)
 
+    // A single non-index file serves at its own name, not the slug root.
+    const name = basename(args.dir)
+    const suffix = target.isFile() && name !== 'index.html' ? encodeURIComponent(name) : ''
     // The URL is the only stdout, so a script can capture it directly.
-    console.log(`${host}${body}`)
+    console.log(`${host}${body}${suffix}`)
   },
 })
