@@ -8,7 +8,7 @@ moonbunny-host is a self-hosted static site host for personal use. It exists so 
 
 - Project: the first URL path segment. A project groups related deploys.
 - Slug: the second URL path segment. A slug identifies one deploy. When the deployer does not name a slug, the slug defaults to a random UUID.
-- Deploy: the upload of a directory of static files to one project and slug. A repeat deploy to the same slug replaces the previous content.
+- Deploy: the upload of a directory of static files to one project and slug. Deploys are immutable: when the requested slug is taken, the server appends a unique suffix and the new deploy lands beside the old one. Deploys are ephemeral: each deploy expires after a number of days, 30 by default, and the server deletes expired deploys. A deploy may opt out of expiration.
 
 ## Boundaries
 
