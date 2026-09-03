@@ -1,6 +1,9 @@
 FROM node:22-alpine
 LABEL org.opencontainers.image.source=https://github.com/mnbny/moonbunny-host
 COPY server/server.bundle.mjs /server.mjs
+# Own the data dir before VOLUME so anonymous volumes inherit the ownership.
+RUN mkdir -p /data && chown node:node /data
+USER node
 VOLUME /data
 EXPOSE 8080
 CMD ["node", "/server.mjs"]
