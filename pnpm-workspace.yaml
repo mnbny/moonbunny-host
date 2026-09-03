@@ -1,0 +1,22 @@
+allowBuilds:
+  esbuild: true
+
+catalog:
+  '@eslint/js': 10.0.1
+  '@tsconfig/strictest': 2.0.8
+  '@types/node': 26.4.1
+  ansis: 4.3.1
+  citty: 0.2.2
+  eslint: 10.9.1
+  eslint-config-prettier: 10.1.8
+  eslint-formatter-pretty: 7.1.0
+  eslint-plugin-import: 2.32.0
+  eslint-plugin-prettier: 5.5.6
+  eslint-plugin-simple-import-sort: 14.0.0
+  globals: 17.12.0
+  prettier: 3.9.6
+  prettier-plugin-packagejson: 3.0.2
+  tsx: 4.23.13
+  # typescript-eslint 8.69.0 rejects TS 7, so this stays on the latest 6.x.
+  typescript: 6.0.3
+  typescript-eslint: 8.69.0

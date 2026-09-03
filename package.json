@@ -1,0 +1,41 @@
+{
+  "name": "@moonbunny/host",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Self-hosted static report host with a deploy CLI",
+  "type": "module",
+  "bin": {
+    "moonbunny": "./cli/moonbunny.mjs"
+  },
+  "scripts": {
+    "validate": "pnpm validate:format && pnpm validate:lint && pnpm validate:typecheck",
+    "validate:format": "prettier --write . --ignore-unknown --cache --log-level=error",
+    "validate:lint": "eslint --fix --cache --format=pretty .",
+    "validate:typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ansis": "catalog:",
+    "citty": "catalog:",
+    "tsx": "catalog:"
+  },
+  "devDependencies": {
+    "@eslint/js": "catalog:",
+    "@tsconfig/strictest": "catalog:",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "eslint-config-prettier": "catalog:",
+    "eslint-formatter-pretty": "catalog:",
+    "eslint-plugin-import": "catalog:",
+    "eslint-plugin-prettier": "catalog:",
+    "eslint-plugin-simple-import-sort": "catalog:",
+    "globals": "catalog:",
+    "prettier": "catalog:",
+    "prettier-plugin-packagejson": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:"
+  },
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
