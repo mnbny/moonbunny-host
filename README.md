@@ -16,7 +16,16 @@ docker compose up -d
 
 The compose file reads `PORT`, `DEPLOY_TOKENS`, and `DATA_PATH` (host path for the data volume, default `./data`) from the environment or a `.env` file beside it, so a NAS panel can configure it without edits.
 
-To run without a checkout on the NAS, `pnpm release` builds the image for x86_64 and pushes it as `:latest` plus an immutable `:<commit>` tag (`MOONBUNNY_IMAGE` overrides the default `ghcr.io/mnbny/moonbunny-host`; `docker login ghcr.io` once first). A release only runs from a clean, committed tree, so every tag names its exact source. The NAS runs `:latest`; rolling back means pointing it at the previous commit tag.
+To run without a checkout on the NAS, `pnpm release` builds the image for x86_64 and pushes it as `:latest` plus an immutable `:<commit>` tag (`MOONBUNNY_IMAGE` overrides the default `ghcr.io/mnbny/moonbunny-host`). A release only runs from a clean, committed tree, so every tag names its exact source. The NAS runs `:latest`; rolling back means pointing it at the previous commit tag.
+
+Registry auth, once per machine — the token needs the `packages` scopes, which `gh` does not grant by default:
+
+```sh
+gh auth refresh -s write:packages,read:packages
+gh auth token | docker login ghcr.io -u yulolimum --password-stdin
+```
+
+The first push creates the ghcr package as private. Make it public in the package settings, or run the same login on the NAS so it can pull.
 
 Put a reverse proxy (Nginx Proxy Manager) in front for the public domain and TLS. Allow request bodies of at least 50MB in the proxy, or it rejects large deploys before the server sees them.
 
