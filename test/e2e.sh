@@ -116,6 +116,8 @@ check "scrubbed deploy still serves" 200 "$(code "$urlevil")"
 
 check "robots.txt is forced" "User-agent: *" "$(curl -s "$HOST/robots.txt" | head -1)"
 
+check "server dropped root privileges" node "$(compose exec -T app sh -c 'ps | awk "\$1==1{print \$2}"')"
+
 fake=$(mktemp -d)
 echo '<h1>fake</h1>' > "$fake/index.html"
 echo '{"auth":"attacker:pwn"}' > "$fake/.meta.json"
