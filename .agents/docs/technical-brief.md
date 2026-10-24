@@ -23,7 +23,7 @@ A deploy extracts into an unservable staging area, and publishing is one atomic 
 - The server caps the upload size and the extracted size. Both counts run while the request streams, so an oversized upload or a decompression bomb is stopped before it fills the volume.
 - The server writes its metadata file after extraction, so a metadata file inside a deploy never wins over the server's own.
 - The host serves a robots rule that forbids all crawling. A file placed at the data root overrides the rule; a deploy cannot create that file.
-- The container runs as an unprivileged user, so a code-execution bug in the extraction path does not grant root. The host data path must be writable by that user.
+- The server starts as root only to repair the data path's ownership, then drops to an unprivileged user before it listens, so a code-execution bug in the extraction path does not grant root and an old volume needs no manual migration.
 
 ## CLI
 
