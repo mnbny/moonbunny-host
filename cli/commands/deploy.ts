@@ -3,6 +3,7 @@ import { defineCommand } from 'citty'
 import { spawn } from 'node:child_process'
 import { stat } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
+import { Readable } from 'node:stream'
 
 function fail(message: string): never {
   console.error(ansis.red(message))
@@ -49,22 +50,22 @@ export default defineCommand({
 
     const [cwd, entry] = target.isDirectory() ? [args.dir, '.'] : [dirname(args.dir), basename(args.dir)]
     const tar = spawn('tar', ['-cz', '-C', cwd, entry], { stdio: ['ignore', 'pipe', 'inherit'] })
-    const chunks: Buffer[] = []
 
-    for await (const chunk of tar.stdout) chunks.push(chunk as Buffer)
-
-    const code = await new Promise<number | null>(resolve => tar.on('close', resolve))
-    if (code !== 0) fail('tar failed to archive the directory.')
-
+    // The archive streams straight into the request, so a large deploy never
+    // has to fit in memory.
     const response = await fetch(`${host}/_deploy/${project}${slug}`, {
-      body: Buffer.concat(chunks),
+      body: Readable.toWeb(tar.stdout) as ReadableStream,
+      duplex: 'half',
       headers: {
         authorization: `Bearer ${token}`,
         ...(expires !== undefined ? { 'x-expires': String(expires) } : {}),
         ...(args.auth ? { 'x-auth': args.auth } : {}),
       },
       method: 'PUT',
-    }).catch((error: Error) => fail(`Could not reach ${host}: ${error.message}`))
+    }).catch((error: Error) => {
+      if (tar.exitCode) fail('tar failed to archive the target.')
+      fail(`Could not reach ${host}: ${error.message}`)
+    })
 
     const body = (await response.text()).trim()
     if (!response.ok) fail(`Deploy failed (${response.status}): ${body}`)
