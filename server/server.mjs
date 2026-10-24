@@ -1,5 +1,5 @@
 import { kebabCase } from 'change-case'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
@@ -9,6 +9,17 @@ import zlib from 'node:zlib'
 const ROOT = process.env.DATA_DIR || '/data'
 const PORT = process.env.PORT || 8080
 const TOKENS = (process.env.DEPLOY_TOKENS || '').split(',').filter(Boolean)
+
+// When started as root, fix the data ownership and drop privileges before
+// anything listens, so a volume written by an older root image keeps working
+// without a manual chown.
+if (process.getuid?.() === 0) {
+  fs.mkdirSync(ROOT, { recursive: true })
+  // -h keeps the chown from reaching through a planted symlink.
+  spawnSync('chown', ['-Rh', 'node:node', ROOT])
+  process.setgid('node')
+  process.setuid('node')
+}
 
 const MIME = {
   '.html': 'text/html',
