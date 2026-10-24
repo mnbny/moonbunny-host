@@ -51,7 +51,7 @@ Prints this guide. Working with an agent? Tell it to run `moonbunny readme` and 
 
 ## Server
 
-One container. Run it behind your reverse proxy, which owns the domain and TLS. Allow request bodies of 50MB or more in the proxy.
+One container. Run it behind your reverse proxy, which owns the domain and TLS. Allow request bodies at least as large as the upload cap in the proxy.
 
 ```sh
 docker compose up -d
@@ -66,6 +66,7 @@ The compose file pulls the published image and reads these from the environment 
 | `IMAGE_URL`     | Image to run. Default: the published image.                      |
 | `IMAGE_VERSION` | Image tag. Pin a `<commit>` tag to roll back. Default: `latest`. |
 | `DEPLOY_TOKENS` | Comma-separated tokens that may deploy.                          |
+| `MAX_BODY_MB`   | Upload cap in MB; extracted content caps at 10x. Default `50`.   |
 | `DATA_PATH`     | Host path for the deployed content. Default `./data`.            |
 | `PORT`          | Published HTTP port. Default `8080`.                             |
 

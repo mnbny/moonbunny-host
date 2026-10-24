@@ -33,7 +33,7 @@ const end = (res, code, msg) => {
 
 const SEGMENT = /^[\w-][\w.-]*$/ // a leading dot is excluded so a slug can never name a dotfile like .meta.json
 
-const MAX_BODY = 50 * 1024 * 1024
+const MAX_BODY = (Number(process.env.MAX_BODY_MB) || 50) * 1024 * 1024
 const MAX_EXTRACTED = 10 * MAX_BODY // gzip expands, so the output needs its own cap
 
 const readMeta = dir => JSON.parse(fs.readFileSync(path.join(dir, '.meta.json'), 'utf8'))

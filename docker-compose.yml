@@ -5,6 +5,7 @@ services:
       - '${PORT:-8080}:8080'
     environment:
       DEPLOY_TOKENS: ${DEPLOY_TOKENS:-changeme} # comma-separated
+      MAX_BODY_MB: ${MAX_BODY_MB:-50}
     volumes:
       - '${DATA_PATH:-./data}:/data'
     restart: unless-stopped
