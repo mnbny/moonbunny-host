@@ -13,7 +13,8 @@ A deploy extracts into an unservable staging area, and publishing is one atomic 
 ## Authentication
 
 - A deploy requires a bearer token. The container environment supplies the valid tokens in one comma-separated variable at start. There is no token management at runtime.
-- A deploy may attach basic auth credentials. The server stores the credentials in the hidden metadata file inside the slug directory. The server then requires matching credentials on every read of that slug.
+- A deploy may attach viewing credentials. The server stores them in the hidden metadata file inside the slug directory. A read of that slug without a session gets a sign-in page on navigation and a bare refusal otherwise. A correct sign-in sets a signed session cookie scoped to that slug alone.
+- The session signing key lives only in process memory, so there is nothing to store or leak and a restart signs every viewer out. Credential and token comparisons are timing safe.
 - The server never serves a hidden file (a name that starts with a dot). This rule also protects the stored credentials.
 
 ## Hardening

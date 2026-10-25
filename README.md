@@ -28,7 +28,7 @@ Ships a directory or a single file to the server, then prints the URL and nothin
 | ----------- | :------: | -------------------------------------------------------------------- |
 | `--project` |    ✔     | First URL path segment.                                              |
 | `--slug`    |          | Second URL path segment. Default: a random UUID.                     |
-| `--auth`    |          | `user:pass` basic auth required to view this deploy.                 |
+| `--auth`    |          | `user:pass` required to view this deploy, via a sign-in page.        |
 | `--expires` |          | Days until the deploy is deleted. `0` keeps it forever. Default: 30. |
 | `--host`    |   ✔\*    | Server URL.                                                          |
 | `--token`   |   ✔\*    | A deploy token.                                                      |
@@ -36,6 +36,8 @@ Ships a directory or a single file to the server, then prints the URL and nothin
 \* The `MOONBUNNY_HOST` and `MOONBUNNY_TOKEN` env vars satisfy these; a flag wins when both are set.
 
 The server slugifies names: `"My Report"` becomes `my-report`. A deployed `index.html` serves at the slug root; any other single file serves at its own name.
+
+A protected deploy shows a sign-in page. A correct sign-in sets a cookie for that deploy only, good for 30 days on that device; a server restart signs viewers out.
 
 ```sh
 # password-protected, gone in 7 days
