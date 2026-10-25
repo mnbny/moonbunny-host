@@ -1,6 +1,6 @@
 import { kebabCase } from 'change-case'
 import { spawn, spawnSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
@@ -48,6 +48,74 @@ const MAX_BODY = (Number(process.env.MAX_BODY_MB) || 50) * 1024 * 1024
 const MAX_EXTRACTED = 10 * MAX_BODY // gzip expands, so the output needs its own cap
 
 const readMeta = dir => JSON.parse(fs.readFileSync(path.join(dir, '.meta.json'), 'utf8'))
+
+// Sessions are HMAC tokens under a per-boot key: stateless to verify, and a
+// restart signs everyone out rather than persisting a secret anywhere.
+const SECRET = randomBytes(32)
+const sessionToken = slugKey => createHmac('sha256', SECRET).update(slugKey).digest('base64url')
+
+// Hashing both sides first permits a timing-safe compare of unequal lengths.
+const safeEqual = (a, b) =>
+  timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest())
+
+const hasSession = (req, slugKey) => {
+  const token = sessionToken(slugKey)
+  return (req.headers.cookie || '').split(/;\s*/).some(c => c.startsWith('mb_auth=') && safeEqual(c.slice(8), token))
+}
+
+const LOGIN_PAGE = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in</title>
+    <style>
+      :root { --bg: #0a0b0e; --card: rgba(255,255,255,0.03); --border: rgba(255,255,255,0.08); --text: #e8eaf0; --muted: #71768a; --accent: #a7b4ff; --accent-strong: #7d8fff; }
+      * { box-sizing: border-box; margin: 0; }
+      body { min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
+      body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(600px 420px at 70% 18%, rgba(125,143,255,0.14), transparent 60%), radial-gradient(900px 600px at 25% 85%, rgba(125,143,255,0.06), transparent 60%); pointer-events: none; }
+      main { width: min(360px, calc(100vw - 48px)); animation: rise 0.5s cubic-bezier(0.2,0.9,0.3,1) both; }
+      @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+      .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 36px 32px 32px; backdrop-filter: blur(20px); box-shadow: 0 24px 60px rgba(0,0,0,0.45); }
+      h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+      p.sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+      p.error { color: #ff9d9d; font-size: 13px; margin-top: 16px; }
+      form { margin-top: 28px; display: grid; gap: 14px; }
+      label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+      input { width: 100%; padding: 11px 14px; font: inherit; color: var(--text); background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; outline: none; transition: border-color 0.15s, box-shadow 0.15s, background 0.15s; }
+      input::placeholder { color: #4a4f63; }
+      input:focus { border-color: var(--accent-strong); background: rgba(255,255,255,0.06); box-shadow: 0 0 0 3px rgba(125,143,255,0.18); }
+      button { margin-top: 10px; padding: 12px; font: inherit; font-weight: 600; color: #0a0b0e; background: linear-gradient(180deg, var(--accent), var(--accent-strong)); border: 0; border-radius: 10px; cursor: pointer; transition: transform 0.12s, box-shadow 0.12s, filter 0.12s; }
+      button:hover { filter: brightness(1.06); box-shadow: 0 6px 24px rgba(125,143,255,0.3); }
+      button:active { transform: translateY(1px); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        <h1>Sign in</h1>
+        <p class="sub">This page is protected.</p>%%ERROR%%
+        <form method="post" action="">
+          <div>
+            <label for="u">Username</label>
+            <input id="u" name="username" autocomplete="username" placeholder="username" required autofocus />
+          </div>
+          <div>
+            <label for="p">Password</label>
+            <input id="p" name="password" type="password" autocomplete="current-password" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" required />
+          </div>
+          <button type="submit">Continue</button>
+        </form>
+      </div>
+    </main>
+  </body>
+</html>
+`
+
+const loginPage = (res, error) => {
+  res.writeHead(401, { 'Content-Type': 'text/html' })
+  res.end(LOGIN_PAGE.replace('%%ERROR%%', error ? '\n        <p class="error">Wrong username or password.</p>' : ''))
+}
 
 // tar refuses absolute symlinks but extracts relative ones, which would let a served
 // path escape the slug; keep only directories and regular files with one hard link.
@@ -183,13 +251,10 @@ function serve(req, res, urlPath) {
       // The sweep can remove the slug mid-request.
       return end(res, 404, 'not found')
     }
-    if (expected) {
-      const header = req.headers.authorization || ''
-      const got = header.startsWith('Basic ') ? Buffer.from(header.slice(6), 'base64').toString() : ''
-      if (got !== expected) {
-        res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="moonbunny"' })
-        return res.end('auth required\n')
-      }
+    if (expected && !hasSession(req, `${parts[0]}/${parts[1]}`)) {
+      // A navigation gets the sign-in page; an asset or script gets a bare 401.
+      if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) return loginPage(res, false)
+      return end(res, 401, 'auth required')
     }
   }
 
@@ -218,6 +283,47 @@ function serve(req, res, urlPath) {
   const stream = fs.createReadStream(file)
   stream.on('error', () => res.destroy())
   stream.pipe(res)
+}
+
+function login(req, res, urlPath) {
+  let parts
+  try {
+    parts = urlPath.split('/').map(decodeURIComponent).filter(Boolean)
+  } catch {
+    return end(res, 404, 'not found')
+  }
+  if (parts.length < 2 || parts.some(p => p.startsWith('.') || p.includes('/'))) return end(res, 404, 'not found')
+
+  const slugDir = path.join(ROOT, parts[0], parts[1])
+  let expected
+  try {
+    expected = fs.existsSync(path.join(slugDir, '.meta.json')) ? readMeta(slugDir).auth : undefined
+  } catch {
+    return end(res, 404, 'not found')
+  }
+  if (!expected) return end(res, 404, 'not found')
+
+  let body = ''
+  req.on('data', chunk => {
+    body += chunk
+    if (body.length > 10_000) req.destroy()
+  })
+  req.on('end', () => {
+    try {
+      const form = new URLSearchParams(body)
+      const given = `${form.get('username') ?? ''}:${form.get('password') ?? ''}`
+      if (!safeEqual(given, expected)) return loginPage(res, true)
+
+      const slugKey = `${parts[0]}/${parts[1]}`
+      res.writeHead(303, {
+        Location: urlPath,
+        'Set-Cookie': `mb_auth=${sessionToken(slugKey)}; Path=/${slugKey}; Max-Age=2592000; HttpOnly; SameSite=Lax`,
+      })
+      res.end()
+    } catch {
+      if (!res.headersSent) end(res, 400, 'bad request')
+    }
+  })
 }
 
 function sweep() {
@@ -310,6 +416,7 @@ http
       res.setHeader('X-Content-Type-Options', 'nosniff')
       const urlPath = req.url.split('?')[0]
       if (req.method === 'PUT' && urlPath.startsWith('/_deploy/')) return deploy(req, res, urlPath)
+      if (req.method === 'POST') return login(req, res, urlPath)
       if (req.method === 'GET' || req.method === 'HEAD') return serve(req, res, urlPath)
       end(res, 405, 'method not allowed')
     } catch (e) {
