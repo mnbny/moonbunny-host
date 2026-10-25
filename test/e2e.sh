@@ -38,13 +38,19 @@ check() {
 
 url=$(cli fixtures --project reports --slug smoke --auth me:secret)
 check "deploy prints the url" "$HOST/reports/smoke/" "$url"
+jar=$(mktemp)
 check "protected page needs auth" 401 "$(code "$HOST/reports/smoke/")"
-check "protected page serves with auth" 200 "$(code -u me:secret "$HOST/reports/smoke/")"
-check "html arrives intact" '<h1>smoke</h1>' "$(curl -s -u me:secret "$HOST/reports/smoke/" | grep -o '<h1>smoke</h1>')"
-check "asset mime type" text/css "$(curl -s -o /dev/null -w '%{content_type}' -u me:secret "$HOST/reports/smoke/style.css")"
-check "metadata file is hidden" 404 "$(code -u me:secret "$HOST/reports/smoke/.meta.json")"
-check "directory redirects to slash" 301 "$(code -u me:secret "$HOST/reports/smoke")"
-check "traversal is blocked" 404 "$(code -u me:secret "$HOST/reports/smoke/..%2f..%2fetc%2fpasswd")"
+check "navigation gets the sign-in page" 'Sign in' "$(curl -s -H 'Accept: text/html' "$HOST/reports/smoke/" | grep -o 'Sign in' | head -1)"
+check "asset request gets a bare 401" 401 "$(code "$HOST/reports/smoke/style.css")"
+check "wrong password is rejected" 401 "$(curl -s -o /dev/null -w '%{http_code}' --data 'username=me&password=nope' "$HOST/reports/smoke/")"
+check "login grants a session" 303 "$(curl -s -o /dev/null -w '%{http_code}' -c "$jar" --data 'username=me&password=secret' "$HOST/reports/smoke/")"
+check "protected page serves with session" 200 "$(code -b "$jar" "$HOST/reports/smoke/")"
+check "html arrives intact" '<h1>smoke</h1>' "$(curl -s -b "$jar" "$HOST/reports/smoke/" | grep -o '<h1>smoke</h1>')"
+check "asset mime type" text/css "$(curl -s -o /dev/null -w '%{content_type}' -b "$jar" "$HOST/reports/smoke/style.css")"
+check "session does not open other slugs" 404 "$(code -b "$jar" "$HOST/reports/nonexistent/")"
+check "metadata file is hidden" 404 "$(code -b "$jar" "$HOST/reports/smoke/.meta.json")"
+check "directory redirects to slash" 301 "$(code -b "$jar" "$HOST/reports/smoke")"
+check "traversal is blocked" 404 "$(code -b "$jar" "$HOST/reports/smoke/..%2f..%2fetc%2fpasswd")"
 
 url2=$(cli fixtures --project reports)
 check "uuid deploy serves without auth" 200 "$(code "$url2")"
@@ -103,7 +109,7 @@ check "first concurrent deploy serves" 200 "$(code "$(cat "$ca")")"
 check "second concurrent deploy serves" 200 "$(code "$(cat "$cb")")"
 rm -f "$ca" "$cb"
 
-check "nosniff header is set" nosniff "$(curl -sI -u me:secret "$HOST/reports/smoke/" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-content-type-options"{print $2}')"
+check "nosniff header is set" nosniff "$(curl -sI "$HOST/reports/smoke/" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-content-type-options"{print $2}')"
 
 # A relative dot-dot symlink survives tar but must not survive the deploy.
 evil=$(mktemp -d)
